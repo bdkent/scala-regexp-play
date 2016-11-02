@@ -9,6 +9,22 @@ class PlaySpec extends FlatSpec with Matchers {
 
   import Builder._
 
+  "Matcher" should "pass Act I, Scene II" in {
+
+    implicit object Instance extends Int_Semiring
+
+    val as = alternative(symbolZero('a'), repetition(symbolZero('a')))
+
+    val bs = alternative(symbolZero('b'), repetition(symbolZero('b')))
+
+    StringMatcher.accept(as, "a") should be(2)
+
+    StringMatcher.accept(sequence(as, bs), "ab") should be(4)
+
+    StringMatcher.accept(repetition(Builder.empty()), "") should be(1)
+
+  }
+
   "Matcher" should "pass Act II, Scene II: Leftmost" in {
 
     implicit object LeftmostInstance extends Leftmost_IndexedSemiring

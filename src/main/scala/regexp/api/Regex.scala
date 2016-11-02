@@ -72,6 +72,13 @@ private[api] object Components {
 
 }
 
+//object SymbolExtractor {
+//  def unapply[C, S](s: Symbol[_ >: C, S]): Option[(C => S)] = {
+//    val f1: (C => S) = s.f.asInstanceOf[(C => S)] // YUCK
+//    Option(f1)
+//  }
+//}
+
 object Builder {
   def empty[C, S]()(implicit semi: Semiring[S]): Lazy[State[C, S]] = {
     Components.empty()
@@ -82,13 +89,20 @@ object Builder {
   }
 
   def symbol[C, S](c: C)(implicit semi: IndexedSemiring[S]): Lazy[State[(C, Int), S]] = {
-    def weight(t: (C, Int)): S = {
+    def f(t: (C, Int)): S = {
       t match {
         case (x, pos) if x == c => semi.index(pos)
         case _                  => semi.zero
       }
     }
-    symbol(weight _)
+    symbol(f _)
+  }
+
+  def symbolZero[S](c: Char)(implicit semi: Semiring[S]): Lazy[State[Char, S]] = {
+    def f(x: Char): S = {
+      if (x == c) semi.one else semi.zero
+    }
+    symbol(f _)
   }
 
   def sequence[C, S](p: => Lazy[State[C, S]], q: => Lazy[State[C, S]])(implicit semi: Semiring[S]): Lazy[State[C, S]] = {

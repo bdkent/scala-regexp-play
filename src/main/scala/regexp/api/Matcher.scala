@@ -8,6 +8,10 @@ object StringMatcher {
   def submatch[S](r: Lazy[State[(Char, Int), S]], str: String)(implicit semi: Semiring[S]): S = {
     Matcher.submatch[Char, S](r, str.toList)
   }
+
+  def accept[S](r: Lazy[State[Char, S]], str: String)(implicit semi: Semiring[S]): S = {
+    Matcher.accept(r, str.toList)
+  }
 }
 
 object Matcher {
@@ -26,6 +30,78 @@ object Matcher {
     def f(x: (Int, C)) = semi.one
     lazy val arb = Components.repetition(Components.symbol(f))
     run(Components.sequence(arb, Components.sequence(r, arb)), s.zipWithIndex)
+  }
+
+  def accept[C, S](r: Lazy[State[C, S]], u: List[C])(implicit semi: Semiring[S]): S = {
+
+    def split[A](as: List[A]): List[(List[A], List[A])] = {
+      as match {
+        case c :: cs => (Nil, c :: cs) :: {
+          for {
+            (s1, s2) <- split(cs)
+          } yield {
+            (c :: s1, s2)
+          }
+        }
+        case Nil => List((Nil, Nil))
+      }
+    }
+
+    def parts[A](as: List[A]): List[List[List[A]]] = {
+      as match {
+        case Nil     => List(Nil)
+        case List(c) => List(List(List(c)))
+        case c :: cs =>
+          {
+            for {
+              p :: ps <- parts(cs)
+            } yield {
+              List((c :: p) :: ps, List(c) :: p :: ps)
+            }
+          }.flatten
+      }
+    }
+
+    def sum(ss: List[S])(implicit semi: Semiring[S]): S = {
+      ss.foldRight(semi.zero)(semi.add(_, _))
+    }
+    def prod(ss: List[S])(implicit semi: Semiring[S]): S = {
+      ss.foldRight(semi.one)(semi.multiply(_, _))
+    }
+
+    r.get.component match {
+      case Empty => if (u.isEmpty) semi.one else semi.zero
+      case Symbol(f) => u match {
+        case List(c) => {
+          val f1: (C => S) = f.asInstanceOf[(C => S)] // YUCK
+          f1(c)
+        }
+        case _ => semi.zero
+      }
+      case Alternative(p, q) => semi.add(accept(p, u), accept(q, u))
+      case Sequence(p, q) =>
+        sum {
+          for {
+            (u1, u2) <- split(u)
+          } yield {
+            semi.multiply(accept(p, u1), accept(q, u2))
+          }
+        }
+      case Repetition(r) =>
+        sum {
+          for {
+            ps <- parts(u)
+          } yield {
+            prod {
+              for {
+                ui <- ps
+              } yield {
+                accept(r, ui)
+              }
+            }
+          }
+        }
+    }
   }
 
   private def step[C, S](mark: S, component: Component[C, S], c: C)(implicit semi: Semiring[S]): Lazy[State[C, S]] = {

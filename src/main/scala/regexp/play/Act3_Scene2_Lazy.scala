@@ -14,7 +14,7 @@ trait Act3_Scene2_Lazy extends LazySemirings {
   case class REGw[+C, +S](active: Boolean = false, emptyw: S, finalw: S, regw: REw[C, S])
 
   sealed trait REw[+C, +S]
-  case class EPSw[+C, +S]() extends REw[C, S]
+  case object EPSw extends REw[Nothing, Nothing]
   case class SYMw[C, +S](x0: (C => S)) extends REw[C, S]
   case class ALTw[+C, +S](x0: Lazy[REGw[C, S]], x1: Lazy[REGw[C, S]]) extends REw[C, S]
   case class SEQw[+C, +S](x0: Lazy[REGw[C, S]], x1: Lazy[REGw[C, S]]) extends REw[C, S]
@@ -26,7 +26,7 @@ trait Act3_Scene2_Lazy extends LazySemirings {
       REGw(
         emptyw = one,
         finalw = zero,
-        regw = EPSw())
+        regw = EPSw)
     }
   }
 
@@ -133,7 +133,7 @@ trait Act3_Scene2_Lazy extends LazySemirings {
     import semi._
 
     r match {
-      case EPSw() => epsw()
+      case EPSw => epsw()
       case SYMw(f) => {
         Lazy {
           val f1: (C => S) = f.asInstanceOf[(C => S)] // YUCK

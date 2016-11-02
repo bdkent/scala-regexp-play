@@ -6,3 +6,7 @@ trait Semiring[S] {
   def add(a: S, b: => S): S
   def multiply(a: S, b: => S): S
 }
+
+trait IndexedSemiring[S] extends Semiring[S] {
+  def index(i: Int): S
+}

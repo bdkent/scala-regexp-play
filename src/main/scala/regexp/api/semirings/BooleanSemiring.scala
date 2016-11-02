@@ -1,4 +1,6 @@
-package regexp.api
+package regexp.api.semirings
+
+import regexp.api.Semiring
 
 trait Boolean_Semiring extends Semiring[Boolean] {
   override val zero = false

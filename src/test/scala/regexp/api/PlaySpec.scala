@@ -3,9 +3,45 @@ package regexp.api
 import org.scalatest.FlatSpec
 import org.scalatest.Matchers
 
+import regexp.api.semirings._
+
 class PlaySpec extends FlatSpec with Matchers {
 
   import Builder._
+
+  "Matcher" should "pass Act II, Scene II: Leftmost" in {
+
+    implicit object LeftmostInstance extends Leftmost_IndexedSemiring
+
+    val a = symbol('a')
+
+    val ab = repetition(alternative(a, symbol('b')))
+
+    val aaba = sequence(sequence(a, ab), a)
+
+    StringMatcher.submatch(aaba, "ab") should be(NoLeft)
+
+    StringMatcher.submatch(aaba, "aa") should be(SomeLeftmost(SomeStart(0)))
+
+    StringMatcher.submatch(aaba, "bababa") should be(SomeLeftmost(SomeStart(1)))
+  }
+
+  "Matcher" should "pass Act II, Scene II: LeftLong" in {
+
+    implicit object LeftLongInstance extends LeftLong_IndexedSemiring
+
+    val a = symbol('a')
+
+    val ab = repetition(alternative(a, symbol('b')))
+
+    val aaba = sequence(sequence(a, ab), a)
+
+    StringMatcher.submatch(aaba, "ab") should be(NoLeftLong)
+
+    StringMatcher.submatch(aaba, "aa") should be(SomeLeftLong(SomeRange(0, 1)))
+
+    StringMatcher.submatch(aaba, "bababa") should be(SomeLeftLong(SomeRange(1, 5)))
+  }
 
   "Matcher" should "pass Act II, Scene III" in {
     implicit object BooleanInstance extends Boolean_Semiring

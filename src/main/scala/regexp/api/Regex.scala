@@ -8,7 +8,7 @@ object Lazy {
   def apply[A](a: => A): Lazy[A] = new Lazy(a)
 }
 
-case class State[+C, +S](active: Boolean = false, emptyWeight: S, finalWeight: S, State: Component[C, S])
+case class State[+C, +S](active: Boolean = false, emptyWeight: S, finalWeight: S, component: Component[C, S])
 
 sealed trait Component[+C, +S]
 case object Empty extends Component[Nothing, Nothing]
@@ -23,7 +23,7 @@ private[api] object Components {
       State(
         emptyWeight = semi.one,
         finalWeight = semi.zero,
-        State = Empty)
+        component = Empty)
     }
   }
 
@@ -32,7 +32,7 @@ private[api] object Components {
       State(
         emptyWeight = semi.zero,
         finalWeight = semi.zero,
-        State = Symbol(f))
+        component = Symbol(f))
     }
   }
 
@@ -42,7 +42,7 @@ private[api] object Components {
         active = p.get.active || q.get.active,
         emptyWeight = semi.add(p.get.emptyWeight, q.get.emptyWeight),
         finalWeight = semi.add(determineFinal(p.get), determineFinal(q.get)),
-        State = Alternative(p, q))
+        component = Alternative(p, q))
     }
   }
 
@@ -52,7 +52,7 @@ private[api] object Components {
         active = p.get.active || q.get.active,
         emptyWeight = semi.multiply(p.get.emptyWeight, q.get.emptyWeight),
         finalWeight = semi.add(semi.multiply(determineFinal(p.get), q.get.emptyWeight), determineFinal(q.get)),
-        State = Sequence(p, q))
+        component = Sequence(p, q))
     }
   }
 
@@ -62,7 +62,7 @@ private[api] object Components {
         active = r.get.active,
         emptyWeight = semi.one,
         finalWeight = determineFinal(r.get),
-        State = Repetition(r))
+        component = Repetition(r))
     }
   }
 
@@ -81,12 +81,22 @@ object Builder {
     Components.symbol(f)
   }
 
+  def symbol[C, S](c: C)(implicit semi: IndexedSemiring[S]): Lazy[State[(C, Int), S]] = {
+    def weight(t: (C, Int)): S = {
+      t match {
+        case (x, pos) if x == c => semi.index(pos)
+        case _                  => semi.zero
+      }
+    }
+    symbol(weight _)
+  }
+
   def sequence[C, S](p: => Lazy[State[C, S]], q: => Lazy[State[C, S]])(implicit semi: Semiring[S]): Lazy[State[C, S]] = {
     Lazy {
       State(
         emptyWeight = semi.multiply(p.get.emptyWeight, q.get.emptyWeight),
         finalWeight = semi.zero,
-        State = Sequence(p, q))
+        component = Sequence(p, q))
     }
   }
 
@@ -95,7 +105,16 @@ object Builder {
       State(
         emptyWeight = semi.add(p.get.emptyWeight, q.get.emptyWeight),
         finalWeight = semi.zero,
-        State = Alternative(p, q))
+        component = Alternative(p, q))
+    }
+  }
+
+  def repetition[C, S](r: => Lazy[State[C, S]])(implicit semi: Semiring[S]): Lazy[State[C, S]] = {
+    Lazy {
+      State(
+        emptyWeight = semi.one,
+        finalWeight = semi.zero,
+        component = Repetition(r))
     }
   }
 }

@@ -1,11 +1,44 @@
 package regexp.play
 
 import regexp.play.HaskellBridge._
-import regexp.play.Semirings._
 
 // NOTE: literal translation of Haskell code that won't actually work at all because Scala evaluates eagerly!!
 
-trait Act3_Scene2_Eager {
+trait LazySemirings {
+  // class Semiring s where
+  //   zero, one :: s
+  //   (⊕), (⊗) :: s → s → s
+  trait Semiring[S] {
+    def zero(): S
+    def one(): S
+    def add(a: S, b: => S): S
+    def multiply(a: S, b: => S): S
+  }
+  // NOTE: some implicit sugar for symbols
+  implicit class SemiringOps[S: Semiring](a: S) {
+    def +(b: => S) = {
+      val semi = implicitly[Semiring[S]]
+      semi.add(a, b)
+    }
+    def *(b: => S) = {
+      val semi = implicitly[Semiring[S]]
+      semi.multiply(a, b)
+    }
+  }
+
+  // instance Semiring Bool where zero = False
+  // one = True
+  // (⊕) = (∨)
+  // (⊗) = (∧)
+  trait Boolean_Semiring extends Semiring[Boolean] {
+    override val zero = false
+    override val one = true
+    override def add(a: Boolean, b: => Boolean) = a ∨ b
+    override def multiply(a: Boolean, b: => Boolean) = a ∧ b
+  }
+}
+
+trait Act3_Scene2_Eager extends LazySemirings {
 
   // added a boolean field active to the data type REGw
   case class REGw[+C, +S](active: Boolean = false, emptyw: S, finalw: S, regw: REw[C, S])
@@ -37,16 +70,20 @@ trait Act3_Scene2_Eager {
       regw = SYMw(f))
   }
 
-  def altw[C, S](p: REGw[C, S], q: REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
+  def altw[C, S](p: => REGw[C, S], q: => REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
     REGw(
-      emptyw = emptyw(p) + emptyw(q),
-      finalw = finalw(p) + finalw(q),
+      emptyw = semi.add(emptyw(p), emptyw(q)),
+      finalw = semi.add(finala(p), finala(q)),
       regw = ALTw(p, q))
   }
 
-  def alt[C, S](p: REGw[C, S], q: REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
+  def alt[C, S](p: => REGw[C, S], q: => REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
     import semi._
-    altw(p, q).copy(active = false, finalw = zero)
+    REGw(
+      active = false,
+      emptyw = semi.add(emptyw(p), emptyw(q)),
+      finalw = zero,
+      regw = ALTw(p, q))
   }
 
   // seqw :: Semiring s ⇒ REGw c s → REGw c s → REGw c s
@@ -55,11 +92,11 @@ trait Act3_Scene2_Eager {
   //          emptyw = emptyw p ⊗ emptyw q,
   //          finalw = finala p ⊗ emptyw q ⊕ finala q,
   //          regw = SEQw p q }
-  def seqw[C, S](p: REGw[C, S], q: REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
+  def seqw[C, S](p: => REGw[C, S], q: => REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
     REGw(
       active = active(p) ∨ active(q),
       emptyw = emptyw(p) * emptyw(q),
-      finalw = (finala(p) * emptyw(q)) + finala(q),
+      finalw = semi.add(semi.multiply(finala(p), emptyw(q)), finala(q)),
       regw = SEQw(p, q))
   }
 
@@ -67,22 +104,28 @@ trait Act3_Scene2_Eager {
   //                  emptyw = emptyw p ⊗ emptyw q,
   //                  finalw = zero,
   //                  regw = SEQw p q }
-  def seq[C, S](p: REGw[C, S], q: REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
+  def seq[C, S](p: => REGw[C, S], q: => REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
     import semi._
-    seqw(p, q).copy(active = false, finalw = zero)
+    REGw(
+      emptyw = emptyw(p) * emptyw(q),
+      finalw = zero,
+      regw = SEQw(p, q))
   }
 
-  def repw[C, S](r: REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
+  def repw[C, S](r: => REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
     import semi._
     REGw(
       emptyw = one,
-      finalw = finalw(r),
+      finalw = finala(r),
       regw = REPw(r))
   }
 
-  def rep[C, S](r: REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
+  def rep[C, S](r: => REGw[C, S])(implicit semi: Semiring[S]): REGw[C, S] = {
     import semi._
-    repw(r).copy(active = false, finalw = zero)
+    REGw(
+      emptyw = one,
+      finalw = zero,
+      regw = REPw(r))
   }
 
   // finala ::Semiring s ⇒ REGw c s → s
@@ -117,8 +160,8 @@ trait Act3_Scene2_Eager {
         symw(f).copy(finalw = fin, active = fin != zero)
       }
       case ALTw(p, q) => altw(shiftw(m, p, c), shiftw(m, q, c))
-      case SEQw(p, q) => seqw(shiftw(m, p, c), shiftw(m * emptyw(p) + finalw(p), q, c))
-      case REPw(r)    => repw(shiftw(m + finalw(r), r, c))
+      case SEQw(p, q) => seqw(shiftw(m, p, c), shiftw(semi.add(semi.multiply(m, emptyw(p)), finalw(p)), q, c))
+      case REPw(r)    => repw(shiftw(semi.add(m, finalw(r)), r, c))
     }
   }
 
@@ -189,7 +232,7 @@ trait Act3_Scene2_Eager {
     //         leftmost NoStart (Start i) = Start i
     //         leftmost (Start i) NoStart = Start i
     //         leftmost (Start i) (Start j) = Start (min i j)
-    override def add(a: Leftmost, b: Leftmost): Leftmost = {
+    override def add(a: Leftmost, b: => Leftmost): Leftmost = {
       (a, b) match {
         case (NoLeft, x) => x
         case (x, NoLeft) => x
@@ -211,7 +254,7 @@ trait Act3_Scene2_Eager {
     // Leftmost x ⊗ Leftmost y = Leftmost (start x y)
     //   where start NoStart s = s
     //         start s       _ = s
-    override def multiply(a: Leftmost, b: Leftmost): Leftmost = {
+    override def multiply(a: Leftmost, b: => Leftmost): Leftmost = {
       (a, b) match {
         case (NoLeft, _) => NoLeft
         case (_, NoLeft) => NoLeft
@@ -255,7 +298,7 @@ trait Act3_Scene2_Eager {
     //       leftlong (Range i j) (Range k l)
     //         | i < k ∨ i == k ∧ j >= l = Range i j
     //         | otherwise               = Range k l
-    override def add(a: LeftLong, b: LeftLong): LeftLong = {
+    override def add(a: LeftLong, b: => LeftLong): LeftLong = {
       (a, b) match {
         case (NoLeftLong, x) => x
         case (x, NoLeftLong) => x
@@ -277,7 +320,7 @@ trait Act3_Scene2_Eager {
     // LeftLong x ⊗ LeftLong y = LeftLong (range x y)
     //   where range ...
     //         range (Range i _ ) (Range _ j) = Range i j
-    override def multiply(a: LeftLong, b: LeftLong): LeftLong = {
+    override def multiply(a: LeftLong, b: => LeftLong): LeftLong = {
       (a, b) match {
         case (NoLeftLong, _) => NoLeftLong
         case (_, NoLeftLong) => NoLeftLong
@@ -321,7 +364,7 @@ object Act3_Scene2_Eager_Repl extends Act3_Scene2_Eager with Act1_Scene2 {
     val b = symw({ (c: Char) => c == 'b' })
 
     // ghci> let anbn = epsw ‘alt‘ seq a (anbn ‘seq‘ b)
-    def anbn(): REGw[Char, Boolean] = alt(epsw(), seq(a, seq(anbn(), b)))
+    def anbn: REGw[Char, Boolean] = alt(epsw(), seq(a, seq(anbn, b)))
 
     println("REMEMBER: Scala is eager so this is going to promptly overflow the stack!")
 

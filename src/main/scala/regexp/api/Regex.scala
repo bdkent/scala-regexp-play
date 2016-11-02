@@ -88,6 +88,11 @@ object Builder {
     Components.symbol(f)
   }
 
+  def symbolIs[C](c: C)(implicit semi: Semiring[Boolean]): Lazy[State[C, Boolean]] = {
+    def f(x: Char): Boolean = { x == c }
+    symbol(f _)
+  }
+
   def symbol[C, S](c: C)(implicit semi: IndexedSemiring[S]): Lazy[State[(C, Int), S]] = {
     def f(t: (C, Int)): S = {
       t match {

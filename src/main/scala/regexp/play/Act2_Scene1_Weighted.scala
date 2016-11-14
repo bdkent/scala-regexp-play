@@ -109,6 +109,7 @@ trait Act2_Scene1_Weighted {
   // shiftw m (REPw r)   c =
   //   repw (shiftw (m ⊕ finalw r) (regw r) c)
   def shiftw[C, S](m: S, r: REw[C, S], c: C)(implicit semi: Semiring[S]): REGw[C, S] = {
+    println(s"shiftw($m, $r, $c)")
     r match {
       case EPSw() => epsw()
       case SYMw(f) => {
